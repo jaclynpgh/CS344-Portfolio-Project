@@ -153,7 +153,7 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 					exit(1);
 			}
 			// Redirect stdout to target file
-			result = dup2(targetFD, 1);
+			int result = dup2(targetFD, 1);
 			if (result == -1) {
 				fprintf(stderr, "cannot open %s for output\n", outputFileName);
 				exit(1);
@@ -312,10 +312,11 @@ void shStart(){
 		outputFile[0] = '\0';
 		for (int i = 0; args[i]; i++) { 
 			args[i] = NULL; 
+			}
 		}
 	}
 
-}
+
 
 /*
 MAIN FUNCTION
