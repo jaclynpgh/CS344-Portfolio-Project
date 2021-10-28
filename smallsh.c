@@ -46,15 +46,18 @@ struct sigaction SIGTSTP_action = {{ 0 }};
 EXIT STATUS FUNCTION
 gets terminated status for child process
 Source: Interpreting the Termination Status
+WIFEXITED() and WIFSIGNALED() are the only two flags that show how a child process terminates
 https://canvas.oregonstate.edu/courses/1830250/pages/exploration-process-api-monitoring-child-processes?module_item_id=21468873
+3.1 Processes by Benjamin Brewster: https://www.youtube.com/watch?v=1R9h-H2UnLs 
 */
+
 void shStatus(int status) {
-	// returns true if the child was terminated normally
+	// WIFEXITED returns true if the child was terminated normally
 	if (WIFEXITED(status)) {
 		printf("exit value %d\n", WEXITSTATUS(status));
 		fflush(stdout);
 	} else {
-		// returns the signal number that caused the child to terminate
+		// process was terminated by a signal, WIFSIGNALED returns true; WTERMSIG gets terminating signal
 		printf("terminated by signal %d\n", WTERMSIG(status));
 		fflush(stdout);
 	}
@@ -90,50 +93,48 @@ EXECUTE FUNCTION
 handles execute of commands and I/O
 Sources: Redirecting Input and Output & fork, exec and File Descriptor Inheritance
 https://canvas.oregonstate.edu/courses/1830250/pages/exploration-processes-and-i-slash-o?module_item_id=21468882
+3.1 Processes by Benjamin Brewster: https://www.youtube.com/watch?v=1R9h-H2UnLs 
 */
 
-void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
+void shExecute(char* args[], char inputFileName[], char outputFileName[]) {
 		
-    //Spawn the child process
+    // set to bogus value so it doesn't get confused with actual meaningful values
 	pid_t spawnpid = -5;
-
+	//Spawn the child process
 	// If fork is successful, the value of spawnpid will be 0 in the child, the child's pid in the parent
     spawnpid = fork();
 
     switch (spawnpid) {
 			case -1:
-				// Code in this branch will be exected by the parent when fork() fails and the creation of child process fails as well
+				// If something went wrong, fork() returns -1 to the parent process; no child process was created
 				perror("fork() failed!");
 				exit(1);
 				break;
 			case 0:	
-			// spawnpid is 0. This means the child will execute the code in this branch
+			// child process, child will execute the code in this branch
 			// set Crtl C back to default
-			
+	
 			SIGINT_action.sa_handler = SIG_DFL;
             sigaction(SIGINT, &SIGINT_action, NULL);
 			fflush(stdout);
 
-
-
-			//user doesn't redirect the standard output or input for a background command, then standard output should be redirected to /dev/null
-			if(backgroundRunning == 1) {
-				int targetFD = open("/dev/null", O_WRONLY);
-				if (targetFD == -1) {
-					fprintf(stderr, "cannot access /dev/null\n");
-					fflush(stderr);
-					exit(1);
-				}
-			}
 			// An input and output file redirected via stdin should be opened for reading/writing only; 
 			//if your shell cannot open the file for reading, print an error message and set the exit status to 1 
+			//a background command should use /dev/null for input/output only when input/ouput redirection is not specified in the command.
 			if (strcmp(inputFileName, "")) {
 				// Open source file
 				int sourceFD = open(inputFileName, O_RDONLY);
 				if (sourceFD == -1) {
 					fprintf(stderr, "cannot open %s for input\n", inputFileName);
 					exit(1);
+				} else{
+				int sourceFD = open("/dev/null", O_RDONLY);
+				if (sourceFD == -1) {
+					fprintf(stderr, "cannot access /dev/null\n");
+					fflush(stderr);
+					exit(1);
 				}
+			}
 				// Redirect stdin to source file
 				int result = dup2(sourceFD, 0);
 				if (result == -1) {
@@ -151,6 +152,13 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 				if (targetFD == -1) {
 					fprintf(stderr, "cannot open %s for output\n", outputFileName);
 					exit(1);
+			} else {
+				int targetFD = open("/dev/null", O_WRONLY);
+				if (targetFD == -1) {
+					fprintf(stderr, "cannot access /dev/null\n");
+					fflush(stderr);
+					exit(1);
+			}
 			}
 			// Redirect stdout to target file
 			int result = dup2(targetFD, 1);
@@ -160,21 +168,24 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 			}
 			fcntl(targetFD, F_SETFD, FD_CLOEXEC);
 			}
-			
-			if (execvp(arr[0], (char* const*)arr)) {
-				fprintf(stderr, "%s: no such file or directory\n", arr[0]);
+			// execvp replaces the currently running with a new specified program and executes the commands, does not create a new process
+			// p in execvp stands for path and searches your PATH enviroment variable for the given path
+			if (execvp(args[0], (char* const*)args)) {
+				perror(args[0]);
 				fflush(stdout);
 				exit(1);
 			}
 			break;
-		default:	
-			// WNOHANG: If the child hasn't terminated, waitpid will immediately return with value 0
+		default:
+			// parent process (any other value), fork() returns the process id of the child process that was just created
 			if (background) {
+				// waitpid(spawnpid, &status, WNOHANG): check if the specified process has completed, return with 0 if it hasn't
 					waitpid(spawnpid, &status, WNOHANG);
 					printf("background pid is %d\n", spawnpid);
 					fflush(stdout);
 				}
 				else {
+					// waitpid(spawnpid, &status, 0): blocks the parent until the specified child process terminates
 					waitpid(spawnpid, &status, 0);
 					// returns true if the child was terminated abnormally
 					if WIFSIGNALED(status){
@@ -182,15 +193,13 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 					}
 					fflush(stdout);
 				}
-			}
+			}			// waitpid(-1, &status, WNOHANG)) checks if ANY process has completed, and returns with 0 if none have
 				while ((spawnpid = waitpid(-1, &status, WNOHANG)) > 0) {
 				printf("background pid %d is done: ", spawnpid);
 				fflush(stdout);
 				shStatus(status);
-				
-			
 			}
-			}
+		}
 
 /*
 READ/PARSE LINE FUNCTION
@@ -201,7 +210,8 @@ strtok - https://www.tutorialspoint.com/c_standard_library/c_function_strtok.htm
 parsing the line - https://brennan.io/2015/01/16/write-a-shell-in-c/ 
 strdup - https://www.geeksforgeeks.org/strdup-strdndup-functions-c/
 */
-void shRead(char* arr[], char inputName[], char outputName[]) {
+void shRead(char* args[], char inputName[], char outputName[]) {
+
 
      char input[MAX_INPUT]; 
 	 background = 0;
@@ -229,7 +239,7 @@ void shRead(char* arr[], char inputName[], char outputName[]) {
 }
 	// if no input, return empty string to reprompt
 	if (!strcmp(input, "")) {
-		arr[0] = strdup("");
+		args[0] = strdup("");
 	}
     // parse the input
     char *token = strtok(input, " "); 
@@ -255,7 +265,7 @@ void shRead(char* arr[], char inputName[], char outputName[]) {
 			}
 			else {
 				// copy into array to check for other commands
-				arr[i] = strdup(token); 
+				args[i] = strdup(token); 
 				
 				
 		}
@@ -274,6 +284,7 @@ void shStart(){
   	char* args[MAX_ARGS];
 	char inputFile[MAX_INPUT] = "";
 	char outputFile[MAX_INPUT] = "";
+	//char* userInput = malloc(sizeof(char) * 2048);
 
 	while(active) {
     // function to prompt user and read lines
@@ -292,7 +303,7 @@ void shStart(){
 		else if (strcmp(args[0], "cd") == 0) {
 			if (args[1]) {
 				if (chdir(args[1]) == -1) {
-					printf("cd failed: no such file or directory found: %s\n", args[1]);
+					fprintf(stderr,"%s failed to open: no such directory\n", args[1]);
 					fflush(stdout);
 				}
 			} else {
@@ -315,8 +326,6 @@ void shStart(){
 			}
 		}
 	}
-
-
 
 /*
 MAIN FUNCTION
@@ -346,8 +355,6 @@ shStart();
 
 	return 0;
 }
-
-
 
 
 
