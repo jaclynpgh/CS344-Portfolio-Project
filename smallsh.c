@@ -45,13 +45,16 @@ struct sigaction SIGTSTP_action = {{ 0 }};
 /*
 EXIT STATUS FUNCTION
 gets terminated status for child process
+Source: Interpreting the Termination Status
+https://canvas.oregonstate.edu/courses/1830250/pages/exploration-process-api-monitoring-child-processes?module_item_id=21468873
 */
-
 void shStatus(int status) {
+	// returns true if the child was terminated normally
 	if (WIFEXITED(status)) {
 		printf("exit value %d\n", WEXITSTATUS(status));
 		fflush(stdout);
 	} else {
+		// returns the signal number that caused the child to terminate
 		printf("terminated by signal %d\n", WTERMSIG(status));
 		fflush(stdout);
 	}
@@ -60,6 +63,7 @@ void shStatus(int status) {
 /*
 SIGNAL HANDLER FUNCTION FOR SIGTSTP 
 Source: https://canvas.oregonstate.edu/courses/1830250/pages/exploration-signal-handling-api?module_item_id=21468881
+
 */
 void handleSIGTSTP(int signo) {
 	// enter into fg mode, write message than flip bool flag
@@ -84,15 +88,13 @@ void handleSIGTSTP(int signo) {
 /*
 EXECUTE FUNCTION 
 handles execute of commands and I/O
-Sources: https://canvas.oregonstate.edu/courses/1830250/pages/exploration-processes-and-i-slash-o?module_item_id=21468882
-https://canvas.oregonstate.edu/courses/1830250/pages/exploration-process-api-creating-and-terminating-processes?module_item_id=21468872
-
+Sources: Redirecting Input and Output & fork, exec and File Descriptor Inheritance
+https://canvas.oregonstate.edu/courses/1830250/pages/exploration-processes-and-i-slash-o?module_item_id=21468882
 */
 
 void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 		
     //Spawn the child process
-	int result;
 	pid_t spawnpid = -5;
 
 	// If fork is successful, the value of spawnpid will be 0 in the child, the child's pid in the parent
@@ -114,7 +116,7 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 
 
 
-			//use /dev/null for output only when output redirection is not specified in the command.
+			//user doesn't redirect the standard output or input for a background command, then standard output should be redirected to /dev/null
 			if(backgroundRunning == 1) {
 				int targetFD = open("/dev/null", O_WRONLY);
 				if (targetFD == -1) {
@@ -129,13 +131,13 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 				// Open source file
 				int sourceFD = open(inputFileName, O_RDONLY);
 				if (sourceFD == -1) {
-					perror("cannot open input file");
+					fprintf(stderr, "cannot open %s for input\n", inputFileName);
 					exit(1);
 				}
 				// Redirect stdin to source file
-				result = dup2(sourceFD, 0);
+				int result = dup2(sourceFD, 0);
 				if (result == -1) {
-					perror("cannot open input file");
+					fprintf(stderr, "cannot open %s for input\n", inputFileName);
 					exit(1);
 				}
 				// closes file
@@ -147,34 +149,34 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 				// Open target file
 				int targetFD = open(outputFileName, O_WRONLY | O_CREAT | O_TRUNC, 0666); 
 				if (targetFD == -1) {
-					perror("cannot open output file");
+					fprintf(stderr, "cannot open %s for output\n", outputFileName);
 					exit(1);
 			}
 			// Redirect stdout to target file
 			result = dup2(targetFD, 1);
 			if (result == -1) {
-				perror("cannot open output file"); 
+				fprintf(stderr, "cannot open %s for output\n", outputFileName);
 				exit(1);
 			}
 			fcntl(targetFD, F_SETFD, FD_CLOEXEC);
 			}
 			
 			if (execvp(arr[0], (char* const*)arr)) {
-				printf("%s: no such file or directory\n", arr[0]);
+				fprintf(stderr, "%s: no such file or directory\n", arr[0]);
 				fflush(stdout);
 				exit(1);
 			}
 			break;
 		default:	
-		
+			// WNOHANG: If the child hasn't terminated, waitpid will immediately return with value 0
 			if (background) {
 					waitpid(spawnpid, &status, WNOHANG);
 					printf("background pid is %d\n", spawnpid);
 					fflush(stdout);
 				}
-				
 				else {
 					waitpid(spawnpid, &status, 0);
+					// returns true if the child was terminated abnormally
 					if WIFSIGNALED(status){
 					shStatus(status);
 					}
@@ -182,11 +184,9 @@ void shExecute(char* arr[], char inputFileName[], char outputFileName[]) {
 				}
 			}
 				while ((spawnpid = waitpid(-1, &status, WNOHANG)) > 0) {
-				
 				printf("background pid %d is done: ", spawnpid);
 				fflush(stdout);
 				shStatus(status);
-				
 				
 			
 			}
@@ -306,12 +306,13 @@ void shStart(){
 			// if not built-in, call execute function to launch any other commands
 			shExecute(args, inputFile, outputFile);
 		}
-		// clear array, and file names before restarting loop
+		// clear array, and file names before restarting loop, reset background
 		background = 0;
 		inputFile[0] = '\0';
 		outputFile[0] = '\0';
 		for (int i = 0; args[i]; i++) { 
-			args[i] = NULL; }
+			args[i] = NULL; 
+		}
 	}
 
 }
