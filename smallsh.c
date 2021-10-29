@@ -95,11 +95,10 @@ Sources: Redirecting Input and Output & fork, exec and File Descriptor Inheritan
 https://canvas.oregonstate.edu/courses/1830250/pages/exploration-processes-and-i-slash-o?module_item_id=21468882
 3.1 Processes by Benjamin Brewster: https://www.youtube.com/watch?v=1R9h-H2UnLs 
 */
-
 void shExecute(char* args[], char inputFileName[], char outputFileName[]) {
-		
-    // set to bogus value so it doesn't get confused with actual meaningful values
+    // spawnpid set to a bogus value so it doesn't get confused with actual meaningful values
 	pid_t spawnpid = -5;
+
 	//Spawn the child process
 	// If fork is successful, the value of spawnpid will be 0 in the child, the child's pid in the parent
     spawnpid = fork();
@@ -112,8 +111,8 @@ void shExecute(char* args[], char inputFileName[], char outputFileName[]) {
 				break;
 			case 0:	
 			// child process, child will execute the code in this branch
-			// set Crtl C back to default
-	
+
+			// set Crtl C back to default 
 			SIGINT_action.sa_handler = SIG_DFL;
             sigaction(SIGINT, &SIGINT_action, NULL);
 			fflush(stdout);
