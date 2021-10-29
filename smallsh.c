@@ -38,7 +38,7 @@ int backgroundRunning = 1;
 int background = 0;
 int status = 0;
 
-// struct for signal handling
+// struct for signal handling, inialized to empty; used {{}} to avoid warrning errors
 struct sigaction SIGINT_action = {{ 0 }};
 struct sigaction SIGTSTP_action = {{ 0 }};
 
@@ -65,11 +65,11 @@ void shStatus(int status) {
 
 /*
 SIGNAL HANDLER FUNCTION FOR SIGTSTP 
-Source: https://canvas.oregonstate.edu/courses/1830250/pages/exploration-signal-handling-api?module_item_id=21468881
-
+Source: Signal Handling https://canvas.oregonstate.edu/courses/1830250/pages/exploration-signal-handling-api?module_item_id=21468881
+3.3 Signals by Benjamin Brewster: https://www.youtube.com/watch?v=VwS3dx3uyiQ
 */
 void handleSIGTSTP(int signo) {
-	// enter into fg mode, write message than flip bool flag
+	// int signo: signal number, prints message when user enters ^Z to enter/exit foreground mode
   char* message = "\nEntering foreground-only mode (& is now ignored)\n";
   char* exitMessage = "\nExiting foreground-only mode.\n";
 	if (backgroundRunning == 1) {
@@ -82,6 +82,7 @@ void handleSIGTSTP(int signo) {
 		write (STDOUT_FILENO, exitMessage, 32); 
 		fflush(stdout);
 	}
+	// reprompt
 	char* prompt = ": ";
     write(STDOUT_FILENO, prompt, 3);
     fflush(stdout);
@@ -332,20 +333,22 @@ Sources: Signal Handling: Module 5 Exploration 3
 https://canvas.oregonstate.edu/courses/1830250/pages/exploration-signal-handling-api?module_item_id=21468881
 Signals SIGCHLD: Module 5 Exploration 4 
 https://canvas.oregonstate.edu/courses/1830250/pages/exploration-signals-concepts-and-types?module_item_id=21468880
+3.3 Signals by Benjamin Brewster: https://www.youtube.com/watch?v=VwS3dx3uyiQ
 */
 int main() {
 	
-  // SIGNT  - shell must ignore SIGINT
+  // SIGINT:parent process and any children running as background process must ignore SIGINT; a child running as a foreground process
+  // must terminate itself when it recieves SIGINT
   //A CTRL-C command from the keyboard sends a SIGINT signal to the parent process and all children at the same time
   SIGINT_action.sa_handler = SIG_IGN;       // signal type is ignored
-  sigfillset(&SIGINT_action.sa_mask);       // block all signals
-  SIGINT_action.sa_flags = 0;      // automatic restart of the interrupted system call 
+  sigfillset(&SIGINT_action.sa_mask);       // blocks all signals
+  SIGINT_action.sa_flags = 0;      			// no flags
   sigaction(SIGINT, &SIGINT_action, NULL);
 
   // SIGTSTP: 
   //A CTRL-Z command from the keyboard sends a SIGTSTP signal to your parent shell process and all children at the same time
   SIGTSTP_action.sa_handler = handleSIGTSTP;   // Register handle_SIGTSTP as the signal handler
-  //sigfillset(&SIGTSTP_action.sa_mask);
+ //sigfillset(&SIGTSTP_action.sa_mask);
   SIGTSTP_action.sa_flags = SA_RESTART;
   sigaction(SIGTSTP, &SIGTSTP_action, NULL);
 
