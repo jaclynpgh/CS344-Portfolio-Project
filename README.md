@@ -1,4 +1,4 @@
-My own shell in C that implements a subset of features of well-known shells, such as bash. 
+A simple shell in C that implements a subset of features of well-known shells, such as bash. 
 
 The program will:
 1. Provide a prompt for running commands
